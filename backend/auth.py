@@ -1,6 +1,12 @@
 import os
+import logging
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -8,7 +14,7 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from database import User, get_db
 
-load_dotenv()
+logger = logging.getLogger("weavetech.auth")
 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "WEAVING_LOCAL_LAN_SUPER_SECRET_KEY_2026")
 ALGORITHM = "HS256"
