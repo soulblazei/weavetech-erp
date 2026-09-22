@@ -1,16 +1,16 @@
 -- ==============================================================================
--- WEAVE-TECH ERP: Core Architecture Migration
--- Version: 001_core_architecture.sql
--- Target Database: Supabase PostgreSQL (15+)
+-- WEAVE-TECH ERP: Idempotent Core Production & Real-Time Migration
+-- File: /database/migrations/001_core_architecture.sql
+-- Target: PostgreSQL 15+ (Supabase / On-Premise LAN Node)
 -- ==============================================================================
 
--- 1. EXTENSIONS
+-- 1. CORE EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
--- 2. MASTER TABLES
+-- 2. MASTER DIRECTORIES WITH GIN TRIGRAM PERFORMANCE INDEXES
 
--- Client / Party Master
+-- Client / Party Master (Buyers, Spinning Mills, Job Workers)
 CREATE TABLE IF NOT EXISTS client_master (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     code VARCHAR(50) NOT NULL UNIQUE,
@@ -24,11 +24,14 @@ CREATE TABLE IF NOT EXISTS client_master (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Trigram index for high-speed fuzzy matching on client name
+-- GIN Trigram Indexes on both name and code to offload fuzzy searching from low-end tablets
 CREATE INDEX IF NOT EXISTS idx_client_master_name_trgm 
 ON client_master USING gin (name gin_trgm_ops);
 
--- Item Master (Yarn counts, Grey qualities, Chemicals, Spares)
+CREATE INDEX IF NOT EXISTS idx_client_master_code_trgm 
+ON client_master USING gin (code gin_trgm_ops);
+
+-- Item Master (Yarn Counts, Grey Fabric Qualities, Chemical Spares, Sizing Materials)
 CREATE TABLE IF NOT EXISTS item_master (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     item_code VARCHAR(50) NOT NULL UNIQUE,
@@ -42,13 +45,30 @@ CREATE TABLE IF NOT EXISTS item_master (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Trigram index for high-speed fuzzy matching on item name
+-- GIN Trigram Indexes on Item name and item_code
 CREATE INDEX IF NOT EXISTS idx_item_master_name_trgm 
 ON item_master USING gin (name gin_trgm_ops);
 
--- 3. STORE & PURCHASE INVENTORY LINKAGE TABLES
+CREATE INDEX IF NOT EXISTS idx_item_master_code_trgm 
+ON item_master USING gin (item_code gin_trgm_ops);
 
--- Store Inventory Balance Table
+-- 3. INVENTORY & PROCUREMENT LEDGERS
+
+-- Store Inventory Ledger (Real-time balance per item & batch)
+CREATE TABLE IF NOT EXISTS inventory_ledger (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    item_id UUID NOT NULL REFERENCES item_master(id) ON DELETE RESTRICT,
+    batch_no VARCHAR(100) NOT NULL DEFAULT 'GENERAL',
+    current_stock NUMERIC(14, 3) NOT NULL DEFAULT 0.000,
+    allocated_stock NUMERIC(14, 3) NOT NULL DEFAULT 0.000,
+    available_stock NUMERIC(14, 3) GENERATED ALWAYS AS (current_stock - allocated_stock) STORED,
+    unit VARCHAR(20) NOT NULL,
+    warehouse_location VARCHAR(100) DEFAULT 'MAIN_STORE',
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_inventory_item_batch UNIQUE (item_id, batch_no)
+);
+
+-- Backward compatibility alias view if needed
 CREATE TABLE IF NOT EXISTS store_inventory (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     item_id UUID NOT NULL REFERENCES item_master(id) ON DELETE RESTRICT,
@@ -59,10 +79,10 @@ CREATE TABLE IF NOT EXISTS store_inventory (
     unit VARCHAR(20) NOT NULL,
     warehouse_location VARCHAR(100) DEFAULT 'MAIN_STORE',
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_item_batch UNIQUE (item_id, batch_no)
+    CONSTRAINT uq_store_item_batch UNIQUE (item_id, batch_no)
 );
 
--- Purchase Orders Table
+-- Purchase Orders
 CREATE TABLE IF NOT EXISTS purchase_orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     po_number VARCHAR(50) NOT NULL UNIQUE,
@@ -73,7 +93,7 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Goods Receipt Notes (GRN) Table
+-- Goods Receipt Notes (GRN)
 CREATE TABLE IF NOT EXISTS goods_receipt_notes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     grn_number VARCHAR(50) NOT NULL UNIQUE,
@@ -98,6 +118,7 @@ CREATE TABLE IF NOT EXISTS production_batches (
     batch_number VARCHAR(50) NOT NULL UNIQUE,
     item_id UUID NOT NULL REFERENCES item_master(id) ON DELETE RESTRICT,
     current_stage_id INT NOT NULL DEFAULT 1 CHECK (current_stage_id BETWEEN 1 AND 13),
+    current_stage VARCHAR(100) NOT NULL DEFAULT 'Yarn Purchase / Inward',
     target_meters NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
     produced_meters NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
     status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('PENDING', 'ACTIVE', 'ON_HOLD', 'QUARANTINED', 'COMPLETED', 'CANCELLED')),
@@ -105,7 +126,10 @@ CREATE TABLE IF NOT EXISTS production_batches (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Partitioned Quality Audits Table
+CREATE INDEX IF NOT EXISTS idx_production_batches_stage 
+ON production_batches (current_stage_id, status);
+
+-- Partitioned Stage Quality Audits Table
 CREATE TABLE IF NOT EXISTS stage_quality_audits (
     audit_id UUID NOT NULL DEFAULT uuid_generate_v4(),
     recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -119,7 +143,7 @@ CREATE TABLE IF NOT EXISTS stage_quality_audits (
     PRIMARY KEY (audit_id, recorded_at)
 ) PARTITION BY RANGE (recorded_at);
 
--- Partition Tables for current and upcoming operational periods
+-- Partition Tables
 CREATE TABLE IF NOT EXISTS stage_quality_audits_2026_h1 PARTITION OF stage_quality_audits
     FOR VALUES FROM ('2026-01-01 00:00:00+00') TO ('2026-07-01 00:00:00+00');
 
@@ -131,7 +155,7 @@ CREATE TABLE IF NOT EXISTS stage_quality_audits_2027_h1 PARTITION OF stage_quali
 
 CREATE TABLE IF NOT EXISTS stage_quality_audits_default PARTITION OF stage_quality_audits DEFAULT;
 
--- GIN Index on Defect Payload for JSON inspection querying
+-- GIN Index on Defect Payload
 CREATE INDEX IF NOT EXISTS idx_stage_quality_audits_defects 
 ON stage_quality_audits USING gin (defect_payload);
 
@@ -150,24 +174,43 @@ CREATE TABLE IF NOT EXISTS production_stage_transitions (
 CREATE INDEX IF NOT EXISTS idx_stage_transitions_batch 
 ON production_stage_transitions (batch_id, transitioned_at DESC);
 
--- 5. CROSS-MODULE TRIGGER: GRN Finalized
--- When GRN status changes to 'COMPLETED', automatically increment store_inventory
--- and update purchase_orders status to 'FULFILLED'
-
+-- 5. CROSS-MODULE TRIGGER: GRN Finalization
 CREATE OR REPLACE FUNCTION fn_handle_grn_finalized()
 RETURNS TRIGGER AS $$
 DECLARE
     v_unit VARCHAR(20);
     v_item_code VARCHAR(50);
 BEGIN
-    -- Only trigger on status transition to COMPLETED
     IF (NEW.status = 'COMPLETED' AND (OLD.status IS NULL OR OLD.status <> 'COMPLETED')) THEN
-        -- Fetch item unit
         SELECT unit, item_code INTO v_unit, v_item_code 
         FROM item_master 
         WHERE id = NEW.item_id;
 
-        -- 1. Increment or insert into store_inventory with accepted_qty
+        -- Increment inventory_ledger
+        INSERT INTO inventory_ledger (
+            item_id,
+            batch_no,
+            current_stock,
+            allocated_stock,
+            unit,
+            warehouse_location,
+            updated_at
+        )
+        VALUES (
+            NEW.item_id,
+            COALESCE(NEW.lot_number, 'GRN-' || NEW.grn_number),
+            NEW.accepted_qty,
+            0.000,
+            COALESCE(v_unit, 'KGS'),
+            'MAIN_STORE',
+            NOW()
+        )
+        ON CONFLICT (item_id, batch_no) 
+        DO UPDATE SET
+            current_stock = inventory_ledger.current_stock + EXCLUDED.current_stock,
+            updated_at = NOW();
+
+        -- Also keep store_inventory in sync
         INSERT INTO store_inventory (
             item_id,
             batch_no,
@@ -191,14 +234,13 @@ BEGIN
             current_stock = store_inventory.current_stock + EXCLUDED.current_stock,
             updated_at = NOW();
 
-        -- 2. Update linked Purchase Order status to FULFILLED if present
+        -- Fulfill Purchase Order
         IF NEW.po_id IS NOT NULL THEN
             UPDATE purchase_orders
             SET status = 'FULFILLED'
             WHERE id = NEW.po_id;
         END IF;
 
-        -- Set completed timestamp
         NEW.completed_at = NOW();
     END IF;
 
@@ -211,3 +253,19 @@ CREATE TRIGGER trg_grn_finalized
 BEFORE UPDATE ON goods_receipt_notes
 FOR EACH ROW
 EXECUTE FUNCTION fn_handle_grn_finalized();
+
+-- 6. REAL-TIME CDC CONFIGURATION (Supabase & PostgreSQL WAL Publications)
+DO $$
+BEGIN
+    -- Enable full replica identity for delta diffs
+    ALTER TABLE production_batches REPLICA IDENTITY FULL;
+    ALTER TABLE inventory_ledger REPLICA IDENTITY FULL;
+    
+    -- Check if publication exists before adding tables
+    IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE production_batches, inventory_ledger;
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Notice on realtime publication setup: %', SQLERRM;
+END $$;

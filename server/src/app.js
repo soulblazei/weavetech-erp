@@ -2,48 +2,50 @@ import express from 'express';
 import cors from 'cors';
 import masterRoutes from './routes/masterRoutes.js';
 import productionRoutes from './routes/productionRoutes.js';
+import realtimeRoutes from './routes/realtimeRoutes.js';
 
 export const app = express();
 
-// Middleware
+// Lightweight middleware
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.json({ limit: '5mb' }));
+app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Health Check
+// Factory LAN Health & Ping Route
 app.get('/health', (req, res) => {
   res.json({
     status: 'HEALTHY',
     service: 'WEAVE-TECH ERP API Server',
+    environment: 'FACTORY_LAN',
     timestamp: new Date().toISOString()
   });
 });
 
-// Mount Routes
+// API Routes
 app.use('/api/masters', masterRoutes);
 app.use('/api/production', productionRoutes);
+app.use('/api/realtime', realtimeRoutes);
 
 // 404 Handler
-app.use((req, res, next) => {
+app.use((req, res) => {
   res.status(404).json({
     error: `Cannot ${req.method} ${req.url}`,
-    message: 'Endpoint not found'
+    message: 'API route not found'
   });
 });
 
-// Centralized Error Handling Middleware
+// Central Error Handler
 app.use((err, req, res, next) => {
-  console.error('[Unhandled Server Error]:', err);
+  console.error('[WEAVE-TECH Error]:', err.message);
   const statusCode = err.status || 500;
   res.status(statusCode).json({
     success: false,
-    error: err.message || 'Internal Server Error',
-    ...(process.env.NODE_ENV !== 'production' ? { stack: err.stack } : {})
+    error: err.message || 'Internal Server Error'
   });
 });
 

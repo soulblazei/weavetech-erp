@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { 
   Search, 
   CheckCircle2, 
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 /**
- * QuickAddMasterModal - Inline modal to quickly register a new master entry
+ * Inline QuickAdd Modal for registering unlinked masters on shop floor
  */
 export function QuickAddMasterModal({ 
   isOpen, 
@@ -28,6 +28,7 @@ export function QuickAddMasterModal({
   const [gstin, setGstin] = useState('');
   const [itemType, setItemType] = useState('GREY_FABRIC');
   const [unit, setUnit] = useState('MTRS');
+  const [gstRate, setGstRate] = useState('5.00');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -40,6 +41,13 @@ export function QuickAddMasterModal({
   }, [initialName, type]);
 
   if (!isOpen) return null;
+
+  // Strict numeric decimal guard for touch devices
+  const sanitizeDecimal = (val) => {
+    const cleaned = val.replace(/[^0-9.]/g, '');
+    const parts = cleaned.split('.');
+    return parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : cleaned;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -58,7 +66,8 @@ export function QuickAddMasterModal({
         code: code.trim() || undefined,
         gstin: gstin.trim() || undefined,
         itemType,
-        unit
+        unit,
+        gstRate: parseFloat(gstRate) || 5.00
       };
 
       const res = await fetch('/api/masters/quick-add', {
@@ -82,24 +91,25 @@ export function QuickAddMasterModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-300 overflow-hidden">
+        
         <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-b border-slate-200">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
               {type === 'client' ? <Building2 className="w-5 h-5" /> : <Package className="w-5 h-5" />}
             </div>
             <div>
-              <h3 className="text-base font-semibold text-slate-900">
+              <h3 className="text-base font-bold text-slate-900">
                 Quick Register {type === 'client' ? 'Party / Buyer' : 'Item / Quality'}
               </h3>
-              <p className="text-xs text-slate-500">Unlinked value detected. Bind master to continue.</p>
+              <p className="text-xs text-slate-500">Unlinked value detected. Bind master to proceed.</p>
             </div>
           </div>
           <button 
             type="button" 
             onClick={onClose} 
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100"
           >
             <X className="w-5 h-5" />
           </button>
@@ -107,14 +117,14 @@ export function QuickAddMasterModal({
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="flex items-center gap-2 p-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-xl">
+            <div className="flex items-center gap-2 p-3 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-xl">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
               {type === 'client' ? 'Party / Mill Name *' : 'Item Description / Quality *'}
             </label>
             <input
@@ -123,27 +133,27 @@ export function QuickAddMasterModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Reliance Textile Mills Ltd"
-              className="w-full min-h-[44px] px-3.5 rounded-xl border border-slate-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-sm font-medium"
+              className="w-full min-h-[48px] h-12 px-4 rounded-xl border border-slate-300 text-slate-900 text-base font-semibold focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
-                System Code
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                Master Code
               </label>
               <input
                 type="text"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                className="w-full min-h-[44px] px-3.5 rounded-xl border border-slate-300 text-slate-900 bg-slate-50 text-sm font-mono"
+                className="w-full min-h-[48px] h-12 px-4 rounded-xl border border-slate-300 text-slate-900 bg-slate-50 text-sm font-mono font-bold"
               />
             </div>
 
             {type === 'client' ? (
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
-                  GSTIN (Optional)
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  GSTIN
                 </label>
                 <input
                   type="text"
@@ -151,18 +161,18 @@ export function QuickAddMasterModal({
                   value={gstin}
                   onChange={(e) => setGstin(e.target.value.toUpperCase())}
                   placeholder="24AAAAA0000A1Z5"
-                  className="w-full min-h-[44px] px-3.5 rounded-xl border border-slate-300 text-slate-900 uppercase placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-sm font-mono"
+                  className="w-full min-h-[48px] h-12 px-4 rounded-xl border border-slate-300 text-slate-900 uppercase text-sm font-mono focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
                 />
               </div>
             ) : (
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
                   Unit
                 </label>
                 <select
                   value={unit}
                   onChange={(e) => setUnit(e.target.value)}
-                  className="w-full min-h-[44px] px-3.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-sm font-medium"
+                  className="w-full min-h-[48px] h-12 px-4 rounded-xl border border-slate-300 text-slate-900 text-sm font-bold focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
                 >
                   <option value="MTRS">MTRS (Meters)</option>
                   <option value="KGS">KGS (Kilograms)</option>
@@ -174,20 +184,36 @@ export function QuickAddMasterModal({
           </div>
 
           {type === 'item' && (
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
-                Category Type
-              </label>
-              <select
-                value={itemType}
-                onChange={(e) => setItemType(e.target.value)}
-                className="w-full min-h-[44px] px-3.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-sm font-medium"
-              >
-                <option value="GREY_FABRIC">Grey Fabric Quality</option>
-                <option value="YARN">Yarn Count (Warp/Weft)</option>
-                <option value="CHEMICAL">Chemical / Sizing Material</option>
-                <option value="SPARES">Loom Mechanical Spare</option>
-              </select>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  Category
+                </label>
+                <select
+                  value={itemType}
+                  onChange={(e) => setItemType(e.target.value)}
+                  className="w-full min-h-[48px] h-12 px-4 rounded-xl border border-slate-300 text-slate-900 text-sm font-bold focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+                >
+                  <option value="GREY_FABRIC">Grey Fabric Quality</option>
+                  <option value="YARN">Yarn Count (Warp/Weft)</option>
+                  <option value="CHEMICAL">Chemical / Sizing Material</option>
+                  <option value="SPARES">Loom Mechanical Spare</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  GST Rate (%)
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={gstRate}
+                  onChange={(e) => setGstRate(sanitizeDecimal(e.target.value))}
+                  placeholder="5.00"
+                  className="w-full min-h-[48px] h-12 px-4 rounded-xl border border-slate-300 text-slate-900 font-mono font-bold text-base focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
             </div>
           )}
 
@@ -195,23 +221,23 @@ export function QuickAddMasterModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors"
+              className="min-h-[48px] px-5 text-sm font-bold text-slate-600 hover:text-slate-900 rounded-xl"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting || !name.trim()}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-medium text-sm rounded-xl shadow-sm transition-all"
+              className="min-h-[48px] inline-flex items-center gap-2 px-6 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] disabled:bg-slate-300 text-white font-bold text-sm rounded-xl shadow-md"
             >
               {submitting ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-5 h-5 animate-spin" />
                   <span>Binding...</span>
                 </>
               ) : (
                 <>
-                  <PlusCircle className="w-4 h-4" />
+                  <PlusCircle className="w-5 h-5" />
                   <span>Save & Interlock</span>
                 </>
               )}
@@ -225,13 +251,13 @@ export function QuickAddMasterModal({
 
 /**
  * MasterInterlockCombobox
- * High-speed debounced fuzzy search combobox that enforces strict master binding.
+ * Low-spec & touch-optimized (48px minimum target) master selection combobox.
  */
-export default function MasterInterlockCombobox({
-  type = 'client', // 'client' | 'item'
+function MasterInterlockComboboxComponent({
+  type = 'client',
   label = 'Party / Client Master',
-  placeholder = 'Search registered master...',
-  value = null, // bound master object: { id, code, name, ... }
+  placeholder = 'Type to fuzzy search master...',
+  value = null,
   onChange = () => {},
   required = true,
   disabled = false,
@@ -249,7 +275,6 @@ export default function MasterInterlockCombobox({
   const inputRef = useRef(null);
   const debounceTimerRef = useRef(null);
 
-  // Sync internal input display if external value changes
   useEffect(() => {
     if (value && value.name) {
       setQueryText(value.name);
@@ -258,7 +283,6 @@ export default function MasterInterlockCombobox({
     }
   }, [value]);
 
-  // Debounced search query against backend API
   const fetchMasters = useCallback(async (searchStr) => {
     setLoading(true);
     try {
@@ -276,7 +300,7 @@ export default function MasterInterlockCombobox({
         setResults([]);
       }
     } catch (err) {
-      console.error('Error fetching master records:', err);
+      console.error('Error in master lookup:', err);
       setResults([]);
     } finally {
       setLoading(false);
@@ -289,7 +313,6 @@ export default function MasterInterlockCombobox({
     setIsOpen(true);
     setHighlightIndex(-1);
 
-    // If typing changes and differs from currently bound value, unlock/clear binding
     if (value && value.name !== text) {
       onChange(null);
     }
@@ -300,7 +323,7 @@ export default function MasterInterlockCombobox({
 
     debounceTimerRef.current = setTimeout(() => {
       fetchMasters(text);
-    }, 250);
+    }, 200);
   };
 
   const handleSelect = (item) => {
@@ -318,12 +341,10 @@ export default function MasterInterlockCombobox({
     inputRef.current?.focus();
   };
 
-  // Close dropdown on outside click or blur enforcement
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (containerRef.current && !containerRef.current.contains(event.target)) {
         setIsOpen(false);
-        // Strict Master Enforcement: If user typed text but didn't select an existing master, prompt QuickAdd
         if (queryText.trim() && (!value || value.name !== queryText.trim())) {
           setShowQuickAdd(true);
         }
@@ -333,7 +354,6 @@ export default function MasterInterlockCombobox({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [queryText, value]);
 
-  // Keyboard navigation support
   const handleKeyDown = (e) => {
     if (!isOpen) {
       if (e.key === 'ArrowDown' || e.key === 'Enter') {
@@ -365,37 +385,37 @@ export default function MasterInterlockCombobox({
 
   return (
     <div className="relative w-full space-y-1.5" ref={containerRef}>
-      {/* Label and Lock Status Indicator */}
+      
+      {/* Label and Interlock Lock Chip */}
       <div className="flex items-center justify-between">
-        <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-700">
-          {type === 'client' ? <Building2 className="w-3.5 h-3.5 text-indigo-600" /> : <Package className="w-3.5 h-3.5 text-indigo-600" />}
+        <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-800">
+          {type === 'client' ? <Building2 className="w-4 h-4 text-indigo-600" /> : <Package className="w-4 h-4 text-indigo-600" />}
           <span>{label}</span>
           {required && <span className="text-red-500 font-bold">*</span>}
         </label>
 
-        {/* Master Data Interlock Badge */}
-        <div className="flex items-center gap-1 text-[11px] font-medium">
+        <div>
           {isBound ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <Lock className="w-3 h-3 text-emerald-600" />
-              <span>Master Bound ({value.code || 'VALID'})</span>
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold text-xs">
+              <Lock className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Bound ({value.code || 'LOCKED'})</span>
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-              <Unlock className="w-3 h-3 text-amber-600" />
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300 font-bold text-xs">
+              <Unlock className="w-3.5 h-3.5 text-amber-600" />
               <span>Unbound</span>
             </span>
           )}
         </div>
       </div>
 
-      {/* Input Field Container */}
+      {/* Main Touch-First Input Box (48px Touch Target) */}
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
           {loading ? (
-            <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+            <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
           ) : (
-            <Search className="w-4 h-4" />
+            <Search className="w-5 h-5" />
           )}
         </div>
 
@@ -411,24 +431,24 @@ export default function MasterInterlockCombobox({
           }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className={`w-full min-h-[46px] pl-10 pr-20 rounded-xl text-sm font-medium transition-all bg-white
+          className={`w-full min-h-[48px] h-12 pl-11 pr-20 rounded-xl text-base font-semibold bg-white transition-colors
             ${isBound 
-              ? 'border-emerald-500 ring-1 ring-emerald-500/20 text-slate-900 font-semibold' 
-              : 'border-slate-300 text-slate-900 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20'}
-            ${error ? 'border-red-500 ring-1 ring-red-500/20' : ''}
+              ? 'border-2 border-emerald-600 text-slate-900 bg-emerald-50/20' 
+              : 'border border-slate-300 text-slate-900 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20'}
+            ${error ? 'border-red-500 ring-1 ring-red-500' : ''}
             ${disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'shadow-sm'}
           `}
         />
 
-        <div className="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
+        <div className="absolute inset-y-0 right-0 pr-1.5 flex items-center gap-1">
           {queryText && (
             <button
               type="button"
               onClick={handleClear}
-              className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-700 rounded-lg"
               title="Clear selection"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5" />
             </button>
           )}
           <button
@@ -437,17 +457,17 @@ export default function MasterInterlockCombobox({
               setIsOpen(!isOpen);
               if (!isOpen && !results.length) fetchMasters(queryText);
             }}
-            className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-700 rounded-lg"
           >
-            <ChevronDown className={`w-4 h-4 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
           </button>
         </div>
       </div>
 
-      {/* Dropdown Menu */}
+      {/* Fuzzy Results Dropdown (High Touch Row Targets) */}
       {isOpen && (
-        <div className="absolute z-40 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden animate-in fade-in-50 duration-100">
-          <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
+        <div className="absolute z-40 left-0 right-0 mt-1 bg-white border border-slate-300 rounded-2xl shadow-xl overflow-hidden">
+          <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
             {results.length > 0 ? (
               results.map((item, idx) => {
                 const isSelected = value?.id === item.id;
@@ -457,81 +477,78 @@ export default function MasterInterlockCombobox({
                   <div
                     key={item.id}
                     onClick={() => handleSelect(item)}
-                    className={`flex items-center justify-between px-4 py-3 cursor-pointer text-sm transition-colors
-                      ${isHighlighted ? 'bg-indigo-50/70' : 'hover:bg-slate-50'}
-                      ${isSelected ? 'bg-emerald-50/70 font-semibold' : ''}
+                    className={`min-h-[52px] flex items-center justify-between px-4 py-3 cursor-pointer text-sm transition-colors
+                      ${isHighlighted ? 'bg-indigo-50' : 'hover:bg-slate-50'}
+                      ${isSelected ? 'bg-emerald-50 font-bold' : ''}
                     `}
                   >
-                    <div className="flex items-center gap-2.5">
-                      <div className={`p-1.5 rounded-lg ${isSelected ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                        {type === 'client' ? <Building2 className="w-4 h-4" /> : <Package className="w-4 h-4" />}
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-xl ${isSelected ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                        {type === 'client' ? <Building2 className="w-5 h-5" /> : <Package className="w-5 h-5" />}
                       </div>
                       <div>
-                        <div className="text-slate-900 font-medium">{item.name}</div>
-                        <div className="text-xs text-slate-400 font-mono">
+                        <div className="text-slate-900 font-bold text-base">{item.name}</div>
+                        <div className="text-xs text-slate-500 font-mono">
                           {item.code} {item.gstin ? `• GST: ${item.gstin}` : ''} {item.unit ? `• ${item.unit}` : ''}
                         </div>
                       </div>
                     </div>
 
                     {isSelected && (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                      <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
                     )}
                   </div>
                 );
               })
             ) : (
-              <div className="p-4 text-center">
-                <p className="text-xs text-slate-500 mb-2">No existing master matches "{queryText}"</p>
+              <div className="p-5 text-center">
+                <p className="text-sm text-slate-600 mb-3 font-medium">No master matches "{queryText}"</p>
                 <button
                   type="button"
                   onClick={() => {
                     setIsOpen(false);
                     setShowQuickAdd(true);
                   }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold transition-colors"
+                  className="min-h-[48px] inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-sm"
                 >
-                  <PlusCircle className="w-3.5 h-3.5" />
-                  <span>Register "{queryText || 'New'}" into Master</span>
+                  <PlusCircle className="w-5 h-5" />
+                  <span>Register "{queryText || 'New'}"</span>
                 </button>
               </div>
             )}
           </div>
 
-          {/* Bottom Quick Add Footer */}
-          <div className="p-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span className="font-medium text-slate-400">PostgreSQL Trigram Search Active</span>
+          <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs font-semibold text-slate-600">
+            <span>GIN Trigram Indexed</span>
             <button
               type="button"
               onClick={() => {
                 setIsOpen(false);
                 setShowQuickAdd(true);
               }}
-              className="font-semibold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1"
+              className="text-indigo-600 hover:text-indigo-800 flex items-center gap-1 font-bold"
             >
-              <PlusCircle className="w-3.5 h-3.5" />
+              <PlusCircle className="w-4 h-4" />
               <span>+ Quick Add</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* Helper and Error Messages */}
       {error ? (
-        <p className="text-xs font-medium text-red-600 flex items-center gap-1">
-          <AlertCircle className="w-3.5 h-3.5" />
+        <p className="text-xs font-bold text-red-600 flex items-center gap-1">
+          <AlertCircle className="w-4 h-4" />
           <span>{error}</span>
         </p>
       ) : helperText ? (
-        <p className="text-xs text-slate-500">{helperText}</p>
+        <p className="text-xs text-slate-500 font-medium">{helperText}</p>
       ) : !isBound && required ? (
-        <p className="text-xs text-amber-600 font-medium flex items-center gap-1">
-          <AlertCircle className="w-3 h-3 shrink-0" />
+        <p className="text-xs text-amber-700 font-bold flex items-center gap-1">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span>Form submission locked until a valid master record is bound.</span>
         </p>
       ) : null}
 
-      {/* Inline Quick Add Master Modal */}
       <QuickAddMasterModal
         isOpen={showQuickAdd}
         onClose={() => setShowQuickAdd(false)}
@@ -544,3 +561,6 @@ export default function MasterInterlockCombobox({
     </div>
   );
 }
+
+export const MasterInterlockCombobox = memo(MasterInterlockComboboxComponent);
+export default MasterInterlockCombobox;
