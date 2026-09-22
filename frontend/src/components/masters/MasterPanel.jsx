@@ -22,8 +22,17 @@ import {
 } from 'lucide-react';
 import { apiClient, mastersApi } from '../../api/client';
 
-export default function MasterPanel({ defaultTab = 'clients' }) {
+export default function MasterPanel({ defaultTab = 'clients', onTabChange = () => {} }) {
   const [activeTab, setActiveTab] = useState(defaultTab); // 'clients', 'employees', 'items', 'company', 'parameters', 'mis'
+  
+  // Synchronize internal activeTab when external defaultTab prop changes (e.g. from sidebar clicks)
+  useEffect(() => {
+    if (defaultTab) {
+      setActiveTab(defaultTab);
+      setSearchQuery('');
+      setCategoryFilter('ALL');
+    }
+  }, [defaultTab]);
   
   // Data lists
   const [clients, setClients] = useState([]);
@@ -220,6 +229,7 @@ export default function MasterPanel({ defaultTab = 'clients' }) {
                 setActiveTab(nav.id);
                 setSearchQuery('');
                 setCategoryFilter('ALL');
+                if (onTabChange) onTabChange(nav.id);
               }}
               className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer ${
                 isActive

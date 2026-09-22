@@ -684,8 +684,21 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-slate-50/70">
           <div className="max-w-7xl mx-auto">
             {activeModule === 'dashboard' && <OwnerDashboard />}
-            {activeModule === 'masters' && <MasterPanel defaultTab={masterSubTab} />}
-            {activeModule === 'crm' && <CRMModule defaultTab={crmSubTab} initialSubTab={crmSubTab} />}
+            {activeModule === 'masters' && (
+              <MasterPanel 
+                key={masterSubTab} 
+                defaultTab={masterSubTab} 
+                onTabChange={(tab) => setMasterSubTab(tab)} 
+              />
+            )}
+            {activeModule === 'crm' && (
+              <CRMModule 
+                key={crmSubTab} 
+                defaultTab={crmSubTab} 
+                initialSubTab={crmSubTab} 
+                onTabChange={(tab) => setCrmSubTab(tab)} 
+              />
+            )}
             {activeModule === 'production' && (
               productionSubTab === 'shopfloor' 
                 ? <ShopFloorModule currentUser={currentUser} />
