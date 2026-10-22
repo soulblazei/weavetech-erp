@@ -55,6 +55,8 @@ import FabricQCInspection from './components/FabricQCInspection';
 import SalesModule from './components/SalesModule';
 import FinanceModule from './components/FinanceModule';
 import StatutoryReports from './components/StatutoryReports';
+import AccessDenied from './components/common/AccessDenied';
+import { isModuleAllowed, getDefaultModule, getRoleMeta } from './config/rbac';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -88,6 +90,8 @@ export default function App() {
       if (storedUser) {
         const parsed = JSON.parse(storedUser);
         setCurrentUser(parsed);
+        const def = getDefaultModule(parsed.role);
+        setActiveModule(prev => isModuleAllowed(parsed.role, prev) ? prev : def);
       }
     } catch (e) {
       localStorage.removeItem('weaving_user_profile');
@@ -96,7 +100,8 @@ export default function App() {
 
   const handleLoginSuccess = (user) => {
     setCurrentUser(user);
-    setActiveModule('dashboard');
+    const def = getDefaultModule(user?.role);
+    setActiveModule(def);
   };
 
   const handleSignOut = () => {
@@ -170,6 +175,8 @@ export default function App() {
     { id: 'ledger', label: 'General Ledger & P&L', icon: Landmark },
   ];
 
+  const roleMeta = getRoleMeta(currentUser.role);
+
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans antialiased overflow-hidden">
       {/* Mobile Drawer Overlay */}
@@ -201,424 +208,444 @@ export default function App() {
             </button>
           </div>
 
-          {/* User Profile Badge */}
+          {/* User Profile Badge with Active Role styling */}
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
             <div className="truncate">
               <div className="text-xs font-bold text-slate-900 truncate">{currentUser.full_name}</div>
-              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800">
-                {currentUser.role}
+              <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border mt-0.5 ${roleMeta.badgeColor}`}>
+                {roleMeta.name}
               </span>
             </div>
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" title="System Online" />
           </div>
 
-          {/* Hierarchical Navigation Tree */}
+          {/* Hierarchical Navigation Tree with Strict RBAC Filtering */}
           <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
             {/* 1. Dashboard */}
-            <button
-              onClick={() => {
-                setActiveModule('dashboard');
-                setIsMobileMenuOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                activeModule === 'dashboard'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              <span>Dashboard (Daily MIS)</span>
-            </button>
+            {isModuleAllowed(currentUser?.role, 'dashboard') && (
+              <button
+                onClick={() => {
+                  setActiveModule('dashboard');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  activeModule === 'dashboard'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                <span>Dashboard (Daily MIS)</span>
+              </button>
+            )}
 
             {/* 2. Master Directory */}
-            <div className="pt-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMasterExpanded(!isMasterExpanded);
-                  setActiveModule('masters');
-                }}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  activeModule === 'masters' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <FolderTree className="w-4 h-4 text-indigo-600" />
-                  <span>Master Directory</span>
-                </div>
-                <div className="p-0.5 rounded bg-slate-200 text-slate-600">
-                  {isMasterExpanded ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                </div>
-              </button>
+            {isModuleAllowed(currentUser?.role, 'masters') && (
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMasterExpanded(!isMasterExpanded);
+                    setActiveModule('masters');
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeModule === 'masters' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <FolderTree className="w-4 h-4 text-indigo-600" />
+                    <span>Master Directory</span>
+                  </div>
+                  <div className="p-0.5 rounded bg-slate-200 text-slate-600">
+                    {isMasterExpanded ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                  </div>
+                </button>
 
-              {isMasterExpanded && (
-                <div className="ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
-                  {masterSubItems.map(sub => {
-                    const SubIcon = sub.icon;
-                    const isSubActive = activeModule === 'masters' && masterSubTab === sub.id;
-                    return (
-                      <button
-                        key={sub.id}
-                        onClick={() => {
-                          setActiveModule('masters');
-                          setMasterSubTab(sub.id);
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
-                          isSubActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                        }`}
-                      >
-                        <SubIcon className="w-3.5 h-3.5" />
-                        <span className="truncate">{sub.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                {isMasterExpanded && (
+                  <div className="ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
+                    {masterSubItems.map(sub => {
+                      const SubIcon = sub.icon;
+                      const isSubActive = activeModule === 'masters' && masterSubTab === sub.id;
+                      return (
+                        <button
+                          key={sub.id}
+                          onClick={() => {
+                            setActiveModule('masters');
+                            setMasterSubTab(sub.id);
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
+                            isSubActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                          }`}
+                        >
+                          <SubIcon className="w-3.5 h-3.5" />
+                          <span className="truncate">{sub.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 3. CRM & Sales Engine */}
-            <div className="pt-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCrmExpanded(!isCrmExpanded);
-                  setActiveModule('crm');
-                }}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  activeModule === 'crm' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <MessageSquareText className="w-4 h-4 text-indigo-600" />
-                  <span>CRM</span>
-                </div>
-                <div className="p-0.5 rounded bg-slate-200 text-slate-600">
-                  {isCrmExpanded ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                </div>
-              </button>
+            {isModuleAllowed(currentUser?.role, 'crm') && (
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCrmExpanded(!isCrmExpanded);
+                    setActiveModule('crm');
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeModule === 'crm' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <MessageSquareText className="w-4 h-4 text-indigo-600" />
+                    <span>CRM</span>
+                  </div>
+                  <div className="p-0.5 rounded bg-slate-200 text-slate-600">
+                    {isCrmExpanded ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                  </div>
+                </button>
 
-              {isCrmExpanded && (
-                <div className="ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
-                  {crmSubItems.map(sub => {
-                    const SubIcon = sub.icon;
-                    const isSubActive = activeModule === 'crm' && crmSubTab === sub.id;
-                    return (
-                      <button
-                        key={sub.id}
-                        onClick={() => {
-                          setActiveModule('crm');
-                          setCrmSubTab(sub.id);
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
-                          isSubActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                        }`}
-                      >
-                        <SubIcon className="w-3.5 h-3.5" />
-                        <span className="truncate">{sub.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                {isCrmExpanded && (
+                  <div className="ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
+                    {crmSubItems.map(sub => {
+                      const SubIcon = sub.icon;
+                      const isSubActive = activeModule === 'crm' && crmSubTab === sub.id;
+                      return (
+                        <button
+                          key={sub.id}
+                          onClick={() => {
+                            setActiveModule('crm');
+                            setCrmSubTab(sub.id);
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
+                            isSubActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                          }`}
+                        >
+                          <SubIcon className="w-3.5 h-3.5" />
+                          <span className="truncate">{sub.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 4. Production & Looms */}
-            <div className="pt-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsProductionExpanded(!isProductionExpanded);
-                  setActiveModule('production');
-                }}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  activeModule === 'production' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Factory className="w-4 h-4 text-indigo-600" />
-                  <span>Production</span>
-                </div>
-                <div className="p-0.5 rounded bg-slate-200 text-slate-600">
-                  {isProductionExpanded ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                </div>
-              </button>
+            {isModuleAllowed(currentUser?.role, 'production') && (
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProductionExpanded(!isProductionExpanded);
+                    setActiveModule('production');
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeModule === 'production' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Factory className="w-4 h-4 text-indigo-600" />
+                    <span>Production</span>
+                  </div>
+                  <div className="p-0.5 rounded bg-slate-200 text-slate-600">
+                    {isProductionExpanded ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                  </div>
+                </button>
 
-              {isProductionExpanded && (
-                <div className="ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
-                  {productionSubItems.map(sub => {
-                    const SubIcon = sub.icon;
-                    const isSubActive = activeModule === 'production' && productionSubTab === sub.id;
-                    return (
-                      <button
-                        key={sub.id}
-                        onClick={() => {
-                          setActiveModule('production');
-                          setProductionSubTab(sub.id);
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
-                          isSubActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                        }`}
-                      >
-                        <SubIcon className="w-3.5 h-3.5" />
-                        <span className="truncate">{sub.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                {isProductionExpanded && (
+                  <div className="ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
+                    {productionSubItems.map(sub => {
+                      const SubIcon = sub.icon;
+                      const isSubActive = activeModule === 'production' && productionSubTab === sub.id;
+                      return (
+                        <button
+                          key={sub.id}
+                          onClick={() => {
+                            setActiveModule('production');
+                            setProductionSubTab(sub.id);
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
+                            isSubActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                          }`}
+                        >
+                          <SubIcon className="w-3.5 h-3.5" />
+                          <span className="truncate">{sub.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 5. Store Module */}
-            <div className="pt-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsStoreExpanded(!isStoreExpanded);
-                  setActiveModule('store');
-                }}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  activeModule === 'store' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Boxes className="w-4 h-4 text-indigo-600" />
-                  <span>Store</span>
-                </div>
-                <div className="p-0.5 rounded bg-slate-200 text-slate-600">
-                  {isStoreExpanded ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                </div>
-              </button>
+            {isModuleAllowed(currentUser?.role, 'store') && (
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsStoreExpanded(!isStoreExpanded);
+                    setActiveModule('store');
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeModule === 'store' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Boxes className="w-4 h-4 text-indigo-600" />
+                    <span>Store</span>
+                  </div>
+                  <div className="p-0.5 rounded bg-slate-200 text-slate-600">
+                    {isStoreExpanded ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                  </div>
+                </button>
 
-              {isStoreExpanded && (
-                <div className="ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
-                  {storeSubItems.map(sub => {
-                    const SubIcon = sub.icon;
-                    const isSubActive = activeModule === 'store' && storeSubTab === sub.id;
-                    return (
-                      <button
-                        key={sub.id}
-                        onClick={() => {
-                          setActiveModule('store');
-                          setStoreSubTab(sub.id);
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
-                          isSubActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                        }`}
-                      >
-                        <SubIcon className="w-3.5 h-3.5" />
-                        <span className="truncate">{sub.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                {isStoreExpanded && (
+                  <div className="ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
+                    {storeSubItems.map(sub => {
+                      const SubIcon = sub.icon;
+                      const isSubActive = activeModule === 'store' && storeSubTab === sub.id;
+                      return (
+                        <button
+                          key={sub.id}
+                          onClick={() => {
+                            setActiveModule('store');
+                            setStoreSubTab(sub.id);
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
+                            isSubActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                          }`}
+                        >
+                          <SubIcon className="w-3.5 h-3.5" />
+                          <span className="truncate">{sub.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 6. Purchase Module */}
-            <div className="pt-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsPurchaseExpanded(!isPurchaseExpanded);
-                  setActiveModule('purchase');
-                }}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  activeModule === 'purchase' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <ShoppingCart className="w-4 h-4 text-indigo-600" />
-                  <span>Purchase</span>
-                </div>
-                <div className="p-0.5 rounded bg-slate-200 text-slate-600">
-                  {isPurchaseExpanded ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                </div>
-              </button>
+            {isModuleAllowed(currentUser?.role, 'purchase') && (
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPurchaseExpanded(!isPurchaseExpanded);
+                    setActiveModule('purchase');
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeModule === 'purchase' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <ShoppingCart className="w-4 h-4 text-indigo-600" />
+                    <span>Purchase</span>
+                  </div>
+                  <div className="p-0.5 rounded bg-slate-200 text-slate-600">
+                    {isPurchaseExpanded ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                  </div>
+                </button>
 
-              {isPurchaseExpanded && (
-                <div className="ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
-                  {purchaseSubItems.map(sub => {
-                    const SubIcon = sub.icon;
-                    const isSubActive = activeModule === 'purchase' && purchaseSubTab === sub.id;
-                    return (
-                      <button
-                        key={sub.id}
-                        onClick={() => {
-                          setActiveModule('purchase');
-                          setPurchaseSubTab(sub.id);
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
-                          isSubActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                        }`}
-                      >
-                        <SubIcon className="w-3.5 h-3.5" />
-                        <span className="truncate">{sub.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                {isPurchaseExpanded && (
+                  <div className="ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
+                    {purchaseSubItems.map(sub => {
+                      const SubIcon = sub.icon;
+                      const isSubActive = activeModule === 'purchase' && purchaseSubTab === sub.id;
+                      return (
+                        <button
+                          key={sub.id}
+                          onClick={() => {
+                            setActiveModule('purchase');
+                            setPurchaseSubTab(sub.id);
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
+                            isSubActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                          }`}
+                        >
+                          <SubIcon className="w-3.5 h-3.5" />
+                          <span className="truncate">{sub.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 7. QC Quality Module */}
-            <div className="pt-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsQcExpanded(!isQcExpanded);
-                  setActiveModule('qc');
-                }}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  activeModule === 'qc' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <CheckSquare className="w-4 h-4 text-indigo-600" />
-                  <span>QC (ASTM 4-Pt)</span>
-                </div>
-                <div className="p-0.5 rounded bg-slate-200 text-slate-600">
-                  {isQcExpanded ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                </div>
-              </button>
+            {isModuleAllowed(currentUser?.role, 'qc') && (
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsQcExpanded(!isQcExpanded);
+                    setActiveModule('qc');
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeModule === 'qc' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <CheckSquare className="w-4 h-4 text-indigo-600" />
+                    <span>QC (ASTM 4-Pt)</span>
+                  </div>
+                  <div className="p-0.5 rounded bg-slate-200 text-slate-600">
+                    {isQcExpanded ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                  </div>
+                </button>
 
-              {isQcExpanded && (
-                <div className="ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
-                  {qcSubItems.map(sub => {
-                    const SubIcon = sub.icon;
-                    const isSubActive = activeModule === 'qc' && qcSubTab === sub.id;
-                    return (
-                      <button
-                        key={sub.id}
-                        onClick={() => {
-                          setActiveModule('qc');
-                          setQcSubTab(sub.id);
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
-                          isSubActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                        }`}
-                      >
-                        <SubIcon className="w-3.5 h-3.5" />
-                        <span className="truncate">{sub.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                {isQcExpanded && (
+                  <div className="ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
+                    {qcSubItems.map(sub => {
+                      const SubIcon = sub.icon;
+                      const isSubActive = activeModule === 'qc' && qcSubTab === sub.id;
+                      return (
+                        <button
+                          key={sub.id}
+                          onClick={() => {
+                            setActiveModule('qc');
+                            setQcSubTab(sub.id);
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
+                            isSubActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                          }`}
+                        >
+                          <SubIcon className="w-3.5 h-3.5" />
+                          <span className="truncate">{sub.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 8. Sales Module */}
-            <div className="pt-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSalesExpanded(!isSalesExpanded);
-                  setActiveModule('sales');
-                }}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  activeModule === 'sales' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Truck className="w-4 h-4 text-indigo-600" />
-                  <span>Sales</span>
-                </div>
-                <div className="p-0.5 rounded bg-slate-200 text-slate-600">
-                  {isSalesExpanded ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                </div>
-              </button>
+            {isModuleAllowed(currentUser?.role, 'sales') && (
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSalesExpanded(!isSalesExpanded);
+                    setActiveModule('sales');
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeModule === 'sales' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Truck className="w-4 h-4 text-indigo-600" />
+                    <span>Sales</span>
+                  </div>
+                  <div className="p-0.5 rounded bg-slate-200 text-slate-600">
+                    {isSalesExpanded ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                  </div>
+                </button>
 
-              {isSalesExpanded && (
-                <div className="ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
-                  {salesSubItems.map(sub => {
-                    const SubIcon = sub.icon;
-                    const isSubActive = activeModule === 'sales' && salesSubTab === sub.id;
-                    return (
-                      <button
-                        key={sub.id}
-                        onClick={() => {
-                          setActiveModule('sales');
-                          setSalesSubTab(sub.id);
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
-                          isSubActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                        }`}
-                      >
-                        <SubIcon className="w-3.5 h-3.5" />
-                        <span className="truncate">{sub.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                {isSalesExpanded && (
+                  <div className="ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
+                    {salesSubItems.map(sub => {
+                      const SubIcon = sub.icon;
+                      const isSubActive = activeModule === 'sales' && salesSubTab === sub.id;
+                      return (
+                        <button
+                          key={sub.id}
+                          onClick={() => {
+                            setActiveModule('sales');
+                            setSalesSubTab(sub.id);
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
+                            isSubActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                          }`}
+                        >
+                          <SubIcon className="w-3.5 h-3.5" />
+                          <span className="truncate">{sub.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 9. Finance Module */}
-            <div className="pt-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsFinanceExpanded(!isFinanceExpanded);
-                  setActiveModule('finance');
-                }}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  activeModule === 'finance' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Landmark className="w-4 h-4 text-indigo-600" />
-                  <span>Finance</span>
-                </div>
-                <div className="p-0.5 rounded bg-slate-200 text-slate-600">
-                  {isFinanceExpanded ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                </div>
-              </button>
+            {isModuleAllowed(currentUser?.role, 'finance') && (
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsFinanceExpanded(!isFinanceExpanded);
+                    setActiveModule('finance');
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    activeModule === 'finance' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Landmark className="w-4 h-4 text-indigo-600" />
+                    <span>Finance</span>
+                  </div>
+                  <div className="p-0.5 rounded bg-slate-200 text-slate-600">
+                    {isFinanceExpanded ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                  </div>
+                </button>
 
-              {isFinanceExpanded && (
-                <div className="ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
-                  {financeSubItems.map(sub => {
-                    const SubIcon = sub.icon;
-                    const isSubActive = activeModule === 'finance' && financeSubTab === sub.id;
-                    return (
-                      <button
-                        key={sub.id}
-                        onClick={() => {
-                          setActiveModule('finance');
-                          setFinanceSubTab(sub.id);
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
-                          isSubActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                        }`}
-                      >
-                        <SubIcon className="w-3.5 h-3.5" />
-                        <span className="truncate">{sub.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                {isFinanceExpanded && (
+                  <div className="ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
+                    {financeSubItems.map(sub => {
+                      const SubIcon = sub.icon;
+                      const isSubActive = activeModule === 'finance' && financeSubTab === sub.id;
+                      return (
+                        <button
+                          key={sub.id}
+                          onClick={() => {
+                            setActiveModule('finance');
+                            setFinanceSubTab(sub.id);
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
+                            isSubActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                          }`}
+                        >
+                          <SubIcon className="w-3.5 h-3.5" />
+                          <span className="truncate">{sub.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 10. Statutory Reports */}
-            <button
-              onClick={() => {
-                setActiveModule('statutory');
-                setIsMobileMenuOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                activeModule === 'statutory' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <Scale className="w-4 h-4" />
-              <span>Statutory Reports</span>
-            </button>
+            {isModuleAllowed(currentUser?.role, 'statutory') && (
+              <button
+                onClick={() => {
+                  setActiveModule('statutory');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  activeModule === 'statutory' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Scale className="w-4 h-4" />
+                <span>Statutory Reports</span>
+              </button>
+            )}
           </nav>
 
           {/* Sidebar Footer */}
@@ -674,42 +701,60 @@ export default function App() {
               />
             </div>
 
-            <span className="hidden sm:flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl font-mono">
-              ● Factory LAN Active
-            </span>
+            {/* Active Role Indicator */}
+            <div className="flex items-center gap-2">
+              <span className={`hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border shadow-xs ${roleMeta.badgeColor}`}>
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>RBAC: {roleMeta.name}</span>
+              </span>
+
+              <span className="hidden sm:flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl font-mono">
+                ● Factory LAN Active
+              </span>
+            </div>
           </div>
         </header>
 
-        {/* Dynamic Viewport */}
+        {/* Dynamic Viewport with Strict RBAC Route Guard */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-slate-50/70">
           <div className="max-w-7xl mx-auto">
-            {activeModule === 'dashboard' && <OwnerDashboard />}
-            {activeModule === 'masters' && (
-              <MasterPanel 
-                key={masterSubTab} 
-                defaultTab={masterSubTab} 
-                onTabChange={(tab) => setMasterSubTab(tab)} 
+            {!isModuleAllowed(currentUser?.role, activeModule) ? (
+              <AccessDenied 
+                role={currentUser?.role} 
+                requestedModule={activeModule} 
+                onNavigate={(mod) => setActiveModule(mod)} 
               />
+            ) : (
+              <>
+                {activeModule === 'dashboard' && <OwnerDashboard />}
+                {activeModule === 'masters' && (
+                  <MasterPanel 
+                    key={masterSubTab} 
+                    defaultTab={masterSubTab} 
+                    onTabChange={(tab) => setMasterSubTab(tab)} 
+                  />
+                )}
+                {activeModule === 'crm' && (
+                  <CRMModule 
+                    key={crmSubTab} 
+                    defaultTab={crmSubTab} 
+                    initialSubTab={crmSubTab} 
+                    onTabChange={(tab) => setCrmSubTab(tab)} 
+                  />
+                )}
+                {activeModule === 'production' && (
+                  productionSubTab === 'shopfloor' 
+                    ? <ShopFloorModule currentUser={currentUser} />
+                    : <LoomSupervisor />
+                )}
+                {activeModule === 'store' && <StoreModule key={storeSubTab} defaultTab={storeSubTab} />}
+                {activeModule === 'purchase' && <PurchaseModule key={purchaseSubTab} defaultTab={purchaseSubTab} />}
+                {activeModule === 'qc' && <FabricQCInspection key={qcSubTab} defaultTab={qcSubTab} />}
+                {activeModule === 'sales' && <SalesModule key={salesSubTab} defaultTab={salesSubTab} />}
+                {activeModule === 'finance' && <FinanceModule key={financeSubTab} defaultTab={financeSubTab} />}
+                {activeModule === 'statutory' && <StatutoryReports />}
+              </>
             )}
-            {activeModule === 'crm' && (
-              <CRMModule 
-                key={crmSubTab} 
-                defaultTab={crmSubTab} 
-                initialSubTab={crmSubTab} 
-                onTabChange={(tab) => setCrmSubTab(tab)} 
-              />
-            )}
-            {activeModule === 'production' && (
-              productionSubTab === 'shopfloor' 
-                ? <ShopFloorModule currentUser={currentUser} />
-                : <LoomSupervisor />
-            )}
-            {activeModule === 'store' && <StoreModule key={storeSubTab} defaultTab={storeSubTab} />}
-            {activeModule === 'purchase' && <PurchaseModule key={purchaseSubTab} defaultTab={purchaseSubTab} />}
-            {activeModule === 'qc' && <FabricQCInspection key={qcSubTab} defaultTab={qcSubTab} />}
-            {activeModule === 'sales' && <SalesModule key={salesSubTab} defaultTab={salesSubTab} />}
-            {activeModule === 'finance' && <FinanceModule key={financeSubTab} defaultTab={financeSubTab} />}
-            {activeModule === 'statutory' && <StatutoryReports />}
           </div>
         </main>
       </div>
