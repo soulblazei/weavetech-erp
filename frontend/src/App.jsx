@@ -245,24 +245,26 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => {
-                    setIsMasterExpanded(!isMasterExpanded);
                     setActiveModule('masters');
+                    setIsMobileMenuOpen(false);
+                    setIsMasterExpanded(!isMasterExpanded);
                   }}
                   className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                    activeModule === 'masters' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
+                    activeModule === 'masters' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <FolderTree className="w-4 h-4 text-indigo-600" />
+                    <FolderTree className="w-4 h-4" />
                     <span>Master Directory</span>
                   </div>
-                  <div className="p-0.5 rounded bg-slate-200 text-slate-600">
+                  <div className="hidden md:block p-0.5 rounded bg-slate-200 text-slate-600">
                     {isMasterExpanded ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
                   </div>
                 </button>
 
+                {/* Sub-items removed from outside in mobile responsive - navigation handled directly inside Master Directory */}
                 {isMasterExpanded && (
-                  <div className="ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
+                  <div className="hidden md:block ml-4 pl-3 border-l-2 border-slate-200 mt-1 space-y-0.5">
                     {masterSubItems.map(sub => {
                       const SubIcon = sub.icon;
                       const isSubActive = activeModule === 'masters' && masterSubTab === sub.id;

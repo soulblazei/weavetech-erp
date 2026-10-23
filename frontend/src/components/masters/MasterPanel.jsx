@@ -171,13 +171,13 @@ export default function MasterPanel({ defaultTab = 'clients', onTabChange = () =
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
       {/* Header Banner */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Layers className="w-7 h-7 text-indigo-600" />
-            <h1 className="text-2xl font-black text-slate-900">Master Data Management Suite</h1>
+            <Layers className="w-6 h-6 sm:w-7 sm:h-7 text-indigo-600 shrink-0" />
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900">Master Data Management Suite</h1>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-slate-500 mt-1 hidden sm:block">
             Global verified directory of Clients, Weaving Workforce, Fabric Construction Specs, and Mill Parameters.
           </p>
         </div>
@@ -188,7 +188,7 @@ export default function MasterPanel({ defaultTab = 'clients', onTabChange = () =
               setClientForm({ ...clientForm, party_code: `CLI-${1001 + clients.length}` });
               setShowClientModal(true);
             }}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer"
+            className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center justify-center gap-2 cursor-pointer"
           >
             <Plus className="w-4 h-4" /> Add Client Master
           </button>
@@ -199,7 +199,7 @@ export default function MasterPanel({ defaultTab = 'clients', onTabChange = () =
               setEmpForm({ ...empForm, employee_code: `EMP-${1001 + employees.length}` });
               setShowEmpModal(true);
             }}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer"
+            className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center justify-center gap-2 cursor-pointer"
           >
             <Plus className="w-4 h-4" /> Add Employee Master
           </button>
@@ -210,15 +210,15 @@ export default function MasterPanel({ defaultTab = 'clients', onTabChange = () =
               setItemForm({ ...itemForm, item_code: `ITM-FAB-${100 + items.length}` });
               setShowItemModal(true);
             }}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer"
+            className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center justify-center gap-2 cursor-pointer"
           >
             <Plus className="w-4 h-4" /> Add Item / Spec Master
           </button>
         )}
       </div>
 
-      {/* Navigation Sub-Tabs */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-2 flex flex-wrap gap-1.5">
+      {/* Navigation Sub-Tabs (Optimized for Mobile Horizontal Swipe & Desktop Wrapping) */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-1.5 sm:p-2 flex overflow-x-auto no-scrollbar sm:flex-wrap gap-1.5 scroll-smooth">
         {masterNav.map(nav => {
           const Icon = nav.icon;
           const isActive = activeTab === nav.id;
@@ -231,7 +231,7 @@ export default function MasterPanel({ defaultTab = 'clients', onTabChange = () =
                 setCategoryFilter('ALL');
                 if (onTabChange) onTabChange(nav.id);
               }}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer ${
+              className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap shrink-0 transition cursor-pointer ${
                 isActive
                   ? 'bg-indigo-600 text-white shadow-xs'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
